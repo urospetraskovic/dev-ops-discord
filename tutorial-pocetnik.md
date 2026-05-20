@@ -40,7 +40,8 @@ Sve ove alate instaliraj **odmah, pre bilo čega drugog**. Verzije su iz [kubern
 | **Docker Desktop** | 25.x | Pravi i pokreće kontejnere | https://www.docker.com/products/docker-desktop/ |
 | **Go** | 1.25.6 | Programski jezik za backend i operator | https://go.dev/dl/ |
 | **kubectl** | 1.30+ | CLI za Kubernetes klaster | `winget install Kubernetes.kubectl` |
-| **k3d** | 5.8.3+ | Lokalni Kubernetes klaster u Docker-u | `choco install k3d` ili sa GitHub releases |
+| **k3d** | 5.8.3+ | Lokalni Kubernetes klaster u Docker-u | `Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))` i onda 
+`choco install k3d -y`
 | **Kubebuilder** | 4.11.0+ | Generator skeleta za Kubernetes operatore | https://github.com/kubernetes-sigs/kubebuilder/releases (preuzmeš binarku, staviš u PATH) |
 | **Helm** | 3.14+ | Paket menadžer za Kubernetes (kao npm za K8s) | `choco install kubernetes-helm` |
 | **Node.js** | 20+ | Za frontend (znaš već) | https://nodejs.org/ |
