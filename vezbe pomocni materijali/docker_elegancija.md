@@ -25,7 +25,9 @@ Referentni dokument sa najboljim praksama za rad sa Dockerom. Koristiti kao smer
 
 #### Ostale bezbednosne prakse
 - **Koristiti `hadolint`** - alat za uočavanje propusta u Dockerfile-u.
-- **Uvek koristiti exec varijantu** za `CMD` i `ENTRYPOINT` (npr. `CMD ["python", "app.py"]`), ne shell varijantu jer ne prosleđuje signale podprocesima.
+- **Uvek koristiti exec varijantu** za `CMD` i `ENTRYPOINT` (npr. `CMD ["python", "app.py"]`), ne shell varijantu.
+  - **Razlog:** shell forma (`CMD python app.py`) pokreće aplikaciju kao podproces `sh`-a. Aplikacija nije PID 1, pa joj signali kao `SIGTERM` / `SIGINT` (Ctrl+C, `docker stop`) **ne stižu** — shell ih ne prosleđuje. Exec forma stavlja aplikaciju kao PID 1 → signali idu direktno njoj → graceful shutdown radi.
+  - Brza provera: `docker stop <kontejner>` — ako se zaustavlja tek posle 10s timeout-a (SIGKILL), verovatno koristiš shell formu.
 - **Koristiti clean build context** - poseban folder sa neophodnim fajlovima:
   ```bash
   docker buildx /files
@@ -94,6 +96,11 @@ COPY --from=builder /app/target/app.jar .
 COPY --from=assets /out /assets
 CMD java -jar /app/app.jar
 ```
+
+> **JDK vs JRE — zašto release stage završava na `jre`, a ne `jdk`:**
+> - **JDK** (Java Development Kit) sadrži kompajler (`javac`), build alate, debugger, sve što treba **za pravljenje** aplikacije. Veliko.
+> - **JRE** (Java Runtime Environment) sadrži samo ono što treba **za izvršavanje** već build-ovanog `.jar`-a. Mnogo manje, manje attack surface-a.
+> - Builder stage koristi `maven:...-jdk-...` (treba mu `javac`), release stage koristi `openjdk:...-jre-...` (samo izvršava). Isti princip kao Go binary u `scratch`/`distroless` — release ima minimum koji treba samo da pokrene.
 
 ---
 

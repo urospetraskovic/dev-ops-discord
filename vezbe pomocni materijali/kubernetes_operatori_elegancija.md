@@ -153,6 +153,18 @@ const (
 - `setUnrecoverableErrorStatus` → `Degraded=True, Progressing=False`
 - `setProgressStatus` → `Degraded=False, Progressing=True`
 
+**`Reason` taksonomija (konvencija, ne enforce-ovano):**
+
+Kad postavljaš `Degraded=True`, koristi semantički `Reason` da signaliziraš **uzrok greške**:
+
+| Reason | Značenje | Primer |
+|--------|----------|--------|
+| `Stalled` | Greška u **konfiguraciji** koju je korisnik napravio. **Nepopravljivo bez user intervencije** (mora se izmeniti `Spec`). | Pogrešan `selector`, nevalidan tip polja, conflict u OwnerReferences |
+| `Failed` | Greška u **klaster infrastrukturi** — operator je sve odradio kako treba, ali klaster nije uspeo da kreira/update-uje resurs. | Cluster `Create()` poziv vraća internal error, quota prekoračena, scheduling neuspeh |
+| `Init` / `Creating` / `Scaling` | Normalan napredak (`Progressing=True`, ne `Degraded`). | Prvi prolaz petlje, kreiranje child resursa, čekanje da Deployment dostigne `Ready` |
+
+> **Zašto razlika bitna:** `Stalled` poručuje korisniku "moraš da promeniš YAML", `Failed` poručuje SRE-u "klaster ima problem". Drugi alati (Argo, Headlamp) prikazuju `Reason` direktno u UI.
+
 **Backward/forward kompatibilnost:** `Status` je deo API-a. Drugi kontroleri (npr. ArgoCD koristi `Progressing`) zavise od njega — **ne uvodi breaking changes**.
 
 ```go
@@ -244,6 +256,26 @@ Komponente Informer-a:
 - **Workqueue** — metapodaci (`namespace/name`); uklanja duplikate ključeva → poštuje level-based dizajn.
 
 Pri dobavljanju iz keša, biblioteka pravi **duboku kopiju** (deep copy) da spreči direktnu izmenu keša. Zato `make generate` generiše `api/v1/zz_generated_deepcopy.go`.
+
+### Happy-path kroz 5 iteracija (mentalna mapa)
+
+Reconciler radi **jednu izmenu po iteraciji** i izlazi. Petlja se okida ponovo na svaki `Update()`. Tipičan tok od `kubectl apply` do `Available=True`:
+
+| Iter | Akcija | Posle iteracije |
+|------|--------|-----------------|
+| **1** | Pročitaj CR. Postavi `Status.Conditions = [Progressing=True, Reason=Init]`. `r.Status().Update()` → izlaz. | Cache update → reflektor → workqueue → triggeruje sledeću petlju. |
+| **2** | CR ima status. `r.Get(deployment)` → `NotFound`. Pozovi `r.Create(deployment)` sa `SetControllerReference`. Postavi `Reason=Creating`. Izlaz. | Deployment kreiran, owned od strane CR-a. |
+| **3** | Deployment postoji ali `ReadyReplicas=0`. Ne menjaj `Spec`. Možda update `Status.AvailableReplicas` na osnovu Deployment-ovog statusa. Izlaz, ostavi `Progressing=True`. | Čekamo da Kubernetes pokrene pod-ove. |
+| **4** | Deployment ima `ReadyReplicas > 0`. Postavi `Available=True, Progressing=False, Reason=Available`. Izlaz. | Aplikacija prima saobraćaj. |
+| **5** | User izmeni `spec.replicas` (npr. 2→5). Reconciler vidi mismatch sa Deployment-om, pozove `r.Update(deployment)` sa novim brojem. Vraća se na iteraciju 3 dok se ne ujednači. | Skaliranje. |
+
+**Pravila koja čine ovaj tok ispravnim:**
+- Svaka iteracija **bilo radi jednu izmenu, bilo samo čita**. Nikad dve izmene u jednom prolazu (vodi ka `409 Conflict`).
+- Iz `Status`-a (`Reason`, `Conditions`) Reconciler zna gde je stao. To je *jedini* način — Reconciler je **stateless**.
+- Ako iteracija 2 dobije `409` na `Create()` (neko drugi je već kreirao), to je benigno → ignoriši, sledeća iteracija će videti `Found`.
+- Ako Deployment nikad ne dođe u `Ready` (ImagePullBackOff, OOM, scheduling): nakon nekog vremena postavi `Degraded=True, Reason=Failed, Message="<detalji>"`. Petlja staje dok user ne izmeni `Spec` ili dok problem ne nestane sam.
+
+> **Heuristika:** ako tvoj Reconciler hoće da uradi >1 izmena u istoj iteraciji, razdvoji ih kroz iteracije preko `Status` polja. Primer: prvo postavi `Status.DatabaseSecret=...`, izađi. Sledeća iteracija vidi popunjeno polje i nastavlja sa kreiranjem Deployment-a.
 
 ---
 
@@ -472,6 +504,16 @@ CNPG kreira Secret-e (`<name>-app`, `<name>-ca`, `<name>-replication`, `<name>-s
 ---
 
 ## 12. Pakovanje i deployment
+
+### Iz-kutije pogodnosti od Kubebuilder-a
+
+Kubebuilder generiše `main.go` koji već uključuje:
+
+- **Leader election** — ako pokrećeš operator sa **više replika** (HA setup), samo *jedna* radi Reconcile u datom trenutku. Ostale stoje u rezervi i preuzimaju ako primary padne. Aktivira se preko `--leader-elect` flag-a u `manager.yaml`-u. Bez ovoga, više replika bi paralelno menjalo iste objekte → race condition i konstantni `409 Conflict`.
+- **Prometheus `/metrics` endpoint** — manager izlaže `/metrics` na portu `:8443` (TLS-protected) sa metrikama kao `workqueue_depth`, `controller_runtime_reconcile_total`, `reconcile_errors_total`. Treba ti samo `ServiceMonitor` da Prometheus scrape-uje. Kubebuilder generiše `config/prometheus/monitor.yaml` — uključi ga u Helm chart.
+- **Health probes** — `/healthz` i `/readyz` su pripremljeni u manager-u; samo eksponiraj port.
+
+> **Pravilo:** ne piši ove stvari sam. Kubebuilder skelet je već production-ready u tom delu. Tvoja briga je samo Reconcile logika.
 
 ### Container slika
 ```bash
