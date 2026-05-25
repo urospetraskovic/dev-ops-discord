@@ -610,9 +610,11 @@ Postavke za `main`:
 - ❌ Allow force pushes (NIKAD)
 - ❌ Allow deletions (NIKAD)
 
-**Korak 4.** Postavi **GitHub Actions secrets** (Settings → Secrets and variables → Actions):
-- `DOCKERHUB_USERNAME` — tvoj DockerHub username
-- `DOCKERHUB_TOKEN` — token koji si napravio u sekciji 0.4
+**Korak 4.** GitHub Actions secrets za DockerHub — **odloženo do Faze 8**.
+
+> Ovde tutorial pominje postavljanje `DOCKERHUB_USERNAME` i `DOCKERHUB_TOKEN` secret-a. **Ne radiš to sad** — vidi izmenu u sekciji 0.4 (ovog dokumenta) i u 1.3 (docker_kuber_pocetnik.md): DockerHub token se kreira tek u Fazi 8 (CI/CD setup), neposredno pre nego što se koristi. Token koji stoji nekorišćen je samo target za leak.
+>
+> Kad budeš u Fazi 8, vraćaš se ovamo, kreiraš token, i odmah ga ubacuješ kao GitHub secret na svaki od relevantnih repo-a (`shop-operator`, `shop`, `shophub`). Bez međupohranjivanja u fajl.
 
 **Korak 5.** Conventional Commits — instaliraj `commitlint`:
 
@@ -629,10 +631,12 @@ jobs:
       - uses: wagoid/commitlint-github-action@v6
 ```
 
-Sa `commitlint.config.js` u root-u:
+Sa `commitlint.config.cjs` u root-u (bitno: `.cjs`, ne `.js`):
 ```js
 module.exports = { extends: ['@commitlint/config-conventional'] };
 ```
+
+> **Zašto `.cjs` a ne `.js`:** novije verzije `wagoid/commitlint-github-action@v6` koriste Node setup gde je `package.json` u kontejneru postavljen na `"type": "module"`, što tretira `.js` fajlove kao ES modules. CommonJS sintaksa `module.exports = ...` tada puca sa `ReferenceError: module is not defined in ES module scope`. `.cjs` ekstenzija eksplicitno označava CommonJS i radi nezavisno od `package.json` setting-a.
 
 **Ponovi koraci 1-5 za sva 5 repozitorijuma.** Vreme: oko sat vremena po članu tima.
 
@@ -667,44 +671,70 @@ helm-charts/
         └── templates/
 ```
 
-**Bootstrap sve odmah** (dan 1) — prazni fajlovi sa `.gitkeep` su OK:
+**Bootstrap sve odmah** (dan 1) — prazni fajlovi sa `.gitkeep` su OK. Sledeća PowerShell skripta kreira ceo bootstrap i napravi PR (jer imaš branch protection — direktan push na `main` ne radi):
 
 ```powershell
-cd helm-charts
-mkdir charts
-mkdir charts/shop
-mkdir charts/shop/templates
-mkdir charts/shophub
-mkdir charts/shophub/templates
-mkdir charts/shophub/charts
-mkdir charts/shop-operator
-mkdir charts/shop-operator/crds
-mkdir charts/shop-operator/templates
+cd C:\Users\Korisnik\Documents\GitHub\helm-charts
 
-# .gitkeep u svaki prazan folder
-ni charts/shop/templates/.gitkeep
-ni charts/shophub/templates/.gitkeep
-ni charts/shop-operator/templates/.gitkeep
-ni charts/shop-operator/crds/.gitkeep
+git checkout main
+git pull
+git checkout -b feat/scaffold-structure
 
-# Minimalni Chart.yaml fajlovi
-@'
+# folder struktura
+New-Item -ItemType Directory -Force -Path "charts/shop/templates" | Out-Null
+New-Item -ItemType Directory -Force -Path "charts/shophub/charts" | Out-Null
+New-Item -ItemType Directory -Force -Path "charts/shophub/templates" | Out-Null
+New-Item -ItemType Directory -Force -Path "charts/shop-operator/crds" | Out-Null
+New-Item -ItemType Directory -Force -Path "charts/shop-operator/templates" | Out-Null
+
+# .gitkeep da git "vidi" prazne foldere (git ne prati prazne dir-ove)
+'' | Set-Content -Encoding utf8 "charts/shop/templates/.gitkeep"
+'' | Set-Content -Encoding utf8 "charts/shophub/charts/.gitkeep"
+'' | Set-Content -Encoding utf8 "charts/shophub/templates/.gitkeep"
+'' | Set-Content -Encoding utf8 "charts/shop-operator/crds/.gitkeep"
+'' | Set-Content -Encoding utf8 "charts/shop-operator/templates/.gitkeep"
+
+# Chart.yaml stub-ovi (sva 3 chart-a)
+@"
 apiVersion: v2
 name: shop
-description: Shop application chart
+description: Shop application (backend + frontend)
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
-'@ | Out-File -FilePath charts/shop/Chart.yaml -Encoding utf8
+"@ | Set-Content -Encoding utf8 "charts/shop/Chart.yaml"
 
-# Isto za shophub i shop-operator (samo zameni "name" i "description").
+@"
+apiVersion: v2
+name: shophub
+description: ShopHub platform (backend + frontend) with prometheus-stack dependency
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+"@ | Set-Content -Encoding utf8 "charts/shophub/Chart.yaml"
+
+@"
+apiVersion: v2
+name: shop-operator
+description: Shop operator (CRDs + controller)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+"@ | Set-Content -Encoding utf8 "charts/shop-operator/Chart.yaml"
+
+# prazni values.yaml u svakom chart-u
+'# Override values here' | Set-Content -Encoding utf8 "charts/shop/values.yaml"
+'# Override values here' | Set-Content -Encoding utf8 "charts/shophub/values.yaml"
+'# Override values here' | Set-Content -Encoding utf8 "charts/shop-operator/values.yaml"
 
 git add .
-git commit -m "chore: initial helm-charts structure"
-git push
+git commit -m "chore: scaffold helm-charts structure (3 charts, empty templates)"
+git push -u origin feat/scaffold-structure
 ```
 
-**Provera:**
+Posle skripte: otvori PR na GitHub-u (`https://github.com/<org>/helm-charts/pulls`), sačekaj da commitlint workflow prođe, **Squash and merge**, obriši branch.
+
+**Provera (kad budeš lokalno imao chart-ove sa template-ima):**
 ```powershell
 helm lint charts/shop          # mora proći
 helm lint charts/shophub
@@ -769,6 +799,53 @@ version: 0.1.0
 namespace: shop-operator-system
 createNamespace: true
 ```
+
+**Bootstrap skripta** (analogna onoj za helm-charts) — pravi folder strukturu, `cluster.yaml` i placeholder fajlove, otvara feature branch i push-uje:
+
+```powershell
+cd C:\Users\Korisnik\Documents\GitHub\kube-state
+
+git checkout main
+git pull
+git checkout -b feat/scaffold-structure
+
+# folderi po komponenti
+New-Item -ItemType Directory -Force -Path "clusters/local/shop-operator" | Out-Null
+New-Item -ItemType Directory -Force -Path "clusters/local/shophub" | Out-Null
+New-Item -ItemType Directory -Force -Path "clusters/local/cnpg" | Out-Null
+New-Item -ItemType Directory -Force -Path "clusters/local/redis-operator" | Out-Null
+New-Item -ItemType Directory -Force -Path "clusters/local/kube-prometheus-stack" | Out-Null
+
+# cluster.yaml — k3d konfiguracija (1 server, 2 worker noda, loadbalancer portovi)
+@"
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: local
+servers: 1
+agents: 2
+ports:
+  - port: 8080:80
+    nodeFilters:
+      - loadbalancer
+  - port: 8443:443
+    nodeFilters:
+      - loadbalancer
+"@ | Set-Content -Encoding utf8 "clusters/local/cluster.yaml"
+
+# placeholder helm.yaml + values.yaml po komponenti (popunjavaš ih u kasnijim fazama)
+$components = @('shop-operator', 'shophub', 'cnpg', 'redis-operator', 'kube-prometheus-stack')
+foreach ($c in $components) {
+    "# TODO: chart reference (filled in later phases)" | Set-Content -Encoding utf8 "clusters/local/$c/helm.yaml"
+    "# TODO: value overrides" | Set-Content -Encoding utf8 "clusters/local/$c/values.yaml"
+}
+
+git add .
+git commit -m "chore: scaffold kube-state structure (cluster config + 5 component dirs)"
+git push -u origin feat/scaffold-structure
+```
+
+Posle skripte: otvori PR (`https://github.com/<org>/kube-state/pulls`), čekiraj commitlint, merge.
 
 `README.md` mora da sadrži uputstva kako se klaster diže od nule:
 
