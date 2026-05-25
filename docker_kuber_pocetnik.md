@@ -70,20 +70,15 @@ Ako imaš već, preskoči. Ako nemaš:
 1. Idi na https://hub.docker.com/signup
 2. Username (npr. `shophubteam`), email, password.
 3. Verify email.
-4. **Account Settings → Security → New Access Token**:
-   - Description: `github-actions-ci`
-   - Access permissions: **Read, Write, Delete**
-   - Klikni **Generate**.
-   - **KOPIRAJ TOKEN SADA** — neće se prikazati ponovo.
-   - Sačuvaj kao `DOCKERHUB_TOKEN` u password manager-u.
-5. Sačuvaj i tvoj username — biće `DOCKERHUB_USERNAME` u GitHub secrets.
+4. Zapamti svoj **username** — biće `DOCKERHUB_USERNAME` u GitHub secrets kasnije.
 
-**Provera:**
-```powershell
-docker login -u <tvoj-username>
-# Password: <nalepi token>
-# Treba: "Login Succeeded"
-```
+> **NE pravi access token sad.** Token se pravi **tek kad ti zatreba** — bilo lokalno za prvi `docker push` (Sekcija 5 ovog dokumenta), bilo u Fazi 8 za CI/CD secret. Token koji stoji mesecima nekorišćen je samo target.
+>
+> **Kad ipak budeš pravio token (Sekcija 5 ili Faza 8):**
+> - **NIKAD** ne sačuvavaj token u fajl unutar projektnog foldera (`token.txt`, `.env`, gde god). `git add .` će ga pokupiti i push na public repo je ireverzibilan.
+> - Lokalno: ide u password manager (Bitwarden, 1Password, KeePass) — ne u `.txt` na disku.
+> - Za CI: direktno iz DockerHub UI → clipboard → GitHub Actions secret formu → zatvori DockerHub stranicu.
+> - Ako sumnjaš da je leak-ovao: revoke na https://hub.docker.com/settings/security i napravi nov.
 
 ### 1.4. Discord razvojni server + bot (za Fazu 2)
 
@@ -123,18 +118,22 @@ Da odmah uradiš, jer Sepolia ETH faucet ima 24h cooldown.
 
 ### 1.6. Sačuvaj credentials negde
 
-Otvori `.txt` fajl u password manager-u sa:
+Sve credential-e drži u **password manager-u** (Bitwarden, 1Password, KeePass — bilo koji). Napravi jedan "Secure Note" sa svim podacima projekta:
+
 ```
 GitHub org: https://github.com/<vaš-org>
 DockerHub username: <username>
-DockerHub token (CI): <dugačak string>
+DockerHub token (CI): <praviš tek kad ti zatreba, vidi 1.3>
 Discord Guild ID: <broj>
 Discord Bot Token: <dugačak string>
 MetaMask Sepolia address: 0x...
 MetaMask seed phrase: (12 reči, ne deli ovo nikad)
 ```
 
-**Pravilo:** ništa od ovoga ne ide u Git. NIKAD. Ako slučajno commit-uješ token — odmah ga revoke-uj na DockerHub-u/Discord-u i napravi novi.
+**Pravila — pročitaj 2x:**
+- **NIKAD ne kreiraj `.txt` / `.env` / `credentials.json` fajl unutar projektnog foldera** za ove podatke. Čak ni privremeno. `git add .` ne pita — pokupi sve untracked fajlove. Push na public repo je nepovratan (token ostaje u istoriji čak i kad ga obrišeš).
+- Password manager-i čuvaju "secure notes" lokalno šifrovane — to je pravo mesto, ne `.txt` na desktop-u.
+- Ako i pored ovoga slučajno commit-uješ secret — **odmah** ga revoke-uj na izvoru (DockerHub/Discord/itd.), napravi novi, i istoriju očisti sa `git filter-repo` (force-push na main). Ali revoke je obavezan korak — niko ne briše istoriju iz svake klonirane kopije repo-a.
 
 ---
 

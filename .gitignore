@@ -1,0 +1,43 @@
+# Secrets, tokeni, kredencijali — NIKAD ne sme u repo
+token.txt
+*token*.txt
+*secret*.txt
+*credentials*
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build artefakti (preventivno — popunjavati kako se pojavljuju)
+node_modules/
+dist/
+build/
+bin/
+*.exe
+*.o
+*.so
+
+# Go
+vendor/
+*.test
+
+# Kubernetes / Helm
+*.kubeconfig
+kubeconfig
+charts/*.tgz
+
+# Logovi
+*.log
+logs/

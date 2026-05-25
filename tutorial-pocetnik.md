@@ -40,7 +40,7 @@ Sve ove alate instaliraj **odmah, pre bilo čega drugog**. Verzije su iz [kubern
 | **Docker Desktop** | 25.x | Pravi i pokreće kontejnere | https://www.docker.com/products/docker-desktop/ |
 | **Go** | 1.25.6 | Programski jezik za backend i operator | https://go.dev/dl/ |
 | **kubectl** | 1.30+ | CLI za Kubernetes klaster | `winget install Kubernetes.kubectl` |
-| **k3d** | 5.8.3+ | Lokalni Kubernetes klaster u Docker-u | `Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))` i onda 
+| **k3d** | 5.8.3+ | Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')) i onda 
 `choco install k3d -y`
 | **Kubebuilder** | 4.11.0+ | Generator skeleta za Kubernetes operatore | https://github.com/kubernetes-sigs/kubebuilder/releases (preuzmeš binarku, staviš u PATH) |
 | **Helm** | 3.14+ | Paket menadžer za Kubernetes (kao npm za K8s) | `choco install kubernetes-helm` |
@@ -76,9 +76,15 @@ Ako bilo šta vraća "command not found" — restartuj PowerShell. Ako i dalje n
 Treba ti za publish-ovanje container image-a (zahtev 5.2) i Helm chart-ova kao OCI artefakata.
 
 - Napravi nalog na https://hub.docker.com.
-- Pod **Account Settings → Security → New Access Token** napravi token sa "Read, Write, Delete" pravima.
-- Token sačuvaj na sigurnom — ide kao GitHub Actions secret pod imenom `DOCKERHUB_TOKEN`.
-- Username takođe ide kao secret: `DOCKERHUB_USERNAME`.
+- Zapamti svoj **username** — ide kao GitHub secret `DOCKERHUB_USERNAME` kasnije.
+
+> **NE pravi access token sad.** Praviš ga **tek u Fazi 8 (CI/CD setup)**, neposredno pre nego što ga staviš u GitHub Actions secret. Razlog: token koji ti stoji nekorišćen nedeljama je samo target za leak. Što kraće od kreiranja do upotrebe — to bolje.
+>
+> **Kad ipak dođe vreme da ga napraviš (Faza 8):**
+> - **NIKAD** ne stavljaj token u `.txt` fajl unutar projektnog foldera. Ni privremeno. `git add .` će ga pokupiti i push-nuti na public repo.
+> - Ide direktno u GitHub repo Settings → Secrets and variables → Actions → New repository secret. Kopiraj iz clipboard-a → nalepi u GitHub formu → zatvori DockerHub stranicu sa tokenom. Posle toga vrednost ne postoji nigde van GitHub-a.
+> - Ako ti treba i lokalno (za `docker login` lokalno na svom računaru): koristi password manager (Bitwarden, 1Password, KeePass). NE fajl u repou.
+> - Ako se slučajno desi leak — odmah ga revoke-uj na https://hub.docker.com/settings/security i napravi nov.
 
 ### 0.5. Discord server za testiranje
 
