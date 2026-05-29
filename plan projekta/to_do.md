@@ -21,7 +21,75 @@
 - [8. Faza 8 — CI/CD pipeline-ovi](#8-faza-8--cicd-pipeline-ovi)
 - [9. Faza 9 — Završno testiranje i demo](#9-faza-9--zavr%C5%A1no-testiranje-i-demo)
 - [Podela posla po članovima tima](#podela-posla-po-%C4%8Dlanovima-tima)
+- [Status (ažurirano 2026-05-28)](#status-a%C5%BEurirano-2026-05-28)
 - [Decision log](#decision-log)
+
+---
+
+## Status (ažurirano 2026-05-29)
+
+### Šta je gotovo (merge-ovano u main)
+
+| Komponenta | PR-ovi | Procenat |
+|---|---|---|
+| Faza 0: 5 repo-a + branch protection + commitlint | shop #1, shop-operator #1, shophub #1, helm-charts #1, kube-state #1 | 100% |
+| Faza 1: k3d klaster + CNPG + MongoDB operator (umesto Redis) | kube-state #3 | 95% |
+| Faza 2: Shop operator (sva 3 CRD-a sa reconciler-ima) | shop-operator #2-6 + #7 (ServiceMonitor) | **100%** |
+| Faza 3: Shop backend (Go/Gin CRUD items/orders, /metrics, /probe/*) + frontend (Vite/React/TS) skela | shop #2-4 | 60% |
+| Faza 4: ShopHub backend (REST API CRUD za Shop CR-ove, bez auth-a) | shophub #2 | 60% |
+| Faza 6: Observability — kube-prometheus-stack + **per-Shop Grafana dashboard** (HTTP + CPU/RAM/FS/net, spec 4.1) | kube-state #4, shop-operator #7, helm-charts #6-8 + fix | **80%** |
+| Faza 7.1: Shop operator Helm chart (eliminacioni zahtev) | helm-charts #2 | 100% |
+| Faza 8: CI/CD pipeline — test/lint/docker-build/docker-publish (shop-operator, shophub) + helm-publish (OCI) | sve faze A+B | **85%** |
+
+Ukupno: **~70%** projekta.
+
+### Završeno u sesiji 2026-05-29 (D-items)
+
+- **D5** ✅ `postInitApplicationSQL` + `OWNER TO` (items/orders šema u CNPG bootstrap-u) — shop-operator
+- **D6** ✅ Hadolint Docker Build workflow (shop-operator + shop)
+- **D9** ✅ Per-Shop Grafana dashboard, 100% po spec 4.1 (HTTP total/2xx/4xx/404/GB + CPU/RAM/FS-volume/net + latency). Jedinstveni posetioci odloženi za D8/Loki.
+- **D11** ✅ Shop backend (Go/Gin, items+orders CRUD, Prometheus `/metrics`, probes) + frontend skela + operator wiring (DATABASE_URL env, probes)
+- **CI/CD Faza A+B** ✅ kompletni validation + publish workflow-i kroz sva 3 app repo-a + helm-charts OCI
+
+**4 bug-a otkrivena+popravljena tokom D9 demo-a:**
+1. Operator `containerHTTPPort` 80→8080 (backend CrashLoopBackOff)
+2. Operator Service bez `app` labele (ServiceMonitor discovery fail)
+3. Operator: dodato `ensureServiceMonitor` (auto-kreira SM po Shop-u) + RBAC
+4. Backend: guard na negativan `Writer.Size()` (Prometheus counter panic → 500 umesto 404)
+
+### Šta SLEDI (po prioritetu, prema vežbama 5 + asistent feedback)
+
+**Hitno** (asistent eksplicitno tražio):
+- **Faza 8 — kompletan CI/CD pipeline.** Detalji u [`ci-cd-plan.md`](./ci-cd-plan.md). Bez ovog `make deploy` ne radi end-to-end.
+
+**Dodaci iz vežbi 5** (asistent verovatno tražio na odbrani — vidi [`../vezbe pomocni materijali/vezbe-5-operatori-helm-discord.md`](../vezbe%20pomocni%20materijali/vezbe-5-operatori-helm-discord.md)):
+
+| # | Stavka | Težina | Gde u to_do.md |
+|---|---|---|---|
+| **D1** | **Conditions u Status-u** sa `Available/Progressing/Degraded` + `Reason` taksonomija (`Stalled`, `Failed`, `Init`, `Creating`, `Scaling`) | ~1h | Faza 2.1, 2.4 — Status polje `Conditions []metav1.Condition` već postoji ali ne koristimo ga u reconciler-u |
+| **D2** | **`+kubebuilder:subresource:scale`** za `kubectl scale shop` + HPA integracija | ~30 min | Faza 2.1 — dodati `selector` polje u Status, marker `subresource:scale:specpath=.spec.replicas,statuspath=.status.readyReplicas,selectorpath=.status.selector` |
+| **D3** | **Watches sa custom predicate-om** za CNPG Secret update (ne samo Owns()) | ~45 min | Faza 2.7 — već u planu, treba implementirati |
+| **D4** | **FieldIndexer** za O(1) pretragu kad reconciler radi `r.List()` po polju | ~30 min | Faza 2.7 — bonus stavka, koristi `mgr.GetFieldIndexer().IndexField(...)` u main.go |
+| ~~**D5**~~ ✅ | ~~**`postInitApplicationSQL` sa `OWNER TO`**~~ — GOTOVO (shop-operator) | ~15 min | — |
+| ~~**D6**~~ ✅ | ~~**Hadolint** workflow~~ — GOTOVO (shop-operator + shop) | ~10 min | — |
+| **D7** | **Pravi unit testovi** (envtest sa namespace per-test) | ~1.5h | Faza 2.10 — placeholder testovi sada, treba da pišemo prave |
+| **D8** | **Loki + Promtail** za logove + **Tempo** za tracing (zahtev 4.1) | ~2h | Faza 6 — trenutno nemamo, samo metrike. **Uključuje i jedinstvene posetioce (4.1.d)** preko Loki distinct query-ja |
+| ~~**D9**~~ ✅ | ~~**Per-Shop Grafana dashboard**~~ — GOTOVO, 100% po spec 4.1 (osim unique visitors → D8) | ~1.5h | — |
+| **D10** | **PrometheusRule alarmi + Alertmanager → Discord** integracija | ~2h | Faza 6 — DiscordChannel CRD ima webhook Secret, treba se Alertmanager-om kačiti. **← SLEDEĆE** |
+| ~~**D11**~~ ✅ | ~~**Shop backend** (Go/Gin) sa CRUD-om i `/metrics`~~ — GOTOVO + frontend skela + operator wiring | ~2h | — |
+| **D12** | **Web3 plaćanje** (Sepolia + USDT + MetaMask) | ~2-3h | Faza 5 — još nismo počeli |
+| **D13** | **ShopHub auth** (JWT email+password ili Web3 SIWE) | ~2h | Faza 4 — trenutno backend bez auth-a |
+| **D14** | **ShopHub Helm chart** sa kube-prometheus-stack dependency-jem | ~1.5h | Faza 7.2 — još nismo počeli |
+| **D15** | **Shop Helm chart** (opcioni fallback za ručnu instalaciju) | ~1h | Faza 7.3 — opcioni |
+
+### Pomocni dokumenti
+
+- [`ci-cd-plan.md`](./ci-cd-plan.md) — detaljan plan kompletnog CI/CD-a (workflows YAML, DockerHub secrets, SemVer)
+- [`../vezbe pomocni materijali/vezbe-5-operatori-helm-discord.md`](../vezbe%20pomocni%20materijali/vezbe-5-operatori-helm-discord.md) — sažetak vežbi 5 (Conditions, scale subresurs, Watches predicate, finalizeri, helm filozofija)
+- [`../vezbe pomocni materijali/kubernetes_operatori_elegancija.md`](../vezbe%20pomocni%20materijali/kubernetes_operatori_elegancija.md) — kompletan operator dev vodič
+- [`../vezbe pomocni materijali/docker_elegancija.md`](../vezbe%20pomocni%20materijali/docker_elegancija.md) — Docker prakse
+- [`../vezbe pomocni materijali/kubernetes_elegancija.md`](../vezbe%20pomocni%20materijali/kubernetes_elegancija.md) — K8s osnovni resursi
+- [`../workflow-cheatsheet.md`](../workflow-cheatsheet.md) — git/WSL workflow gotchas (Spotahome dead, kubebuilder multigroup, itd.)
 
 ---
 
@@ -1348,8 +1416,16 @@ Pre odbrane, napravite **`demo.md`** sa skriptom (10–15 min):
 
 | Datum | Odluka | Razlog |
 |-------|--------|--------|
-| _(popunjavati)_ | _(npr. "Spotahome Redis operator umesto REDB")_ | _(npr. "REDB traži licencu, Spotahome je open-source")_ |
-| | | |
+| 2026-05-25 | **MongoDB Community Operator umesto Spotahome Redis** za "light" DB opciju | Spotahome image `quay.io/spotahome/redis-operator:v1.3.0` vraća 404 (napušten projekat). REDB traži trial licencu. Spec sekcija 1.2 eksplicitno dozvoljava substituciju ("npr. MongoDB"). |
+| 2026-05-25 | **Multi-group kubebuilder layout** (`kubebuilder edit --multigroup=true` pre `create api`) | Imamo 3 API grupe (`apps`, `notify`, `payments`) pod `shophub.local` domenom — default single-group layout ne dozvoljava. |
+| 2026-05-25 | **WSL Ubuntu za operator dev**, Windows za k3d/frontend/Docker | kubebuilder + make najbolje rade na Linux-u. Docker Desktop ostaje na Windows-u zbog k3d integracije. Vidi memory `wsl-operator-dev-setup`. |
+| 2026-05-26 | **MongoDB API workaround**: postaviti `mdb.ObjectMeta.OwnerReferences = [...]` umesto `controllerutil.SetControllerReference` | `mongodbv1.MongoDBCommunity` override-uje `GetOwnerReferences()` da vraća sintetičku self-ref, što razbija standardni controllerutil. Direct field access bypass-uje method override. Vidi memory `mongodb-operator-gotchas`. |
+| 2026-05-26 | **Shop operator materijalizuje `mongodb-database` SA + Role + RoleBinding** u tenant namespace-u | MongoDB community operator helm chart kreira SA samo u svom install namespace-u. Cross-namespace MongoDBCommunity bi stagnirao sa "SA not found". Naš operator to rešava preko `ensureMongoDBRBAC` helpera. |
+| 2026-05-26 | **MongoDB operator `watchNamespace="*"`** preko helm upgrade | Default je `watchNamespace=<install-ns>` što sprečava operator da vidi CR-ove iz tenant namespace-a. |
+| 2026-05-26 | **ServiceMonitor auto-create iz Shop operator-a** (`ensureServiceMonitor`) | Po vežbama 5 + spec 4.1 — svaki Shop dobija automatski Prometheus scraping bez ručne konfiguracije. |
+| 2026-05-26 | **`serviceMonitorSelectorNilUsesHelmValues=false`** za kube-prometheus-stack | Bez ovog Prometheus default selector traži label `release: kube-prometheus-stack` na SM-ovima. Naš operator ne stavlja taj label jer bi to vezalo operator za specifičan helm release. |
+| 2026-05-26 | **shophub backend pokreće se na portu 9090 (lokalno)**, ne 8080 | k3d `cluster.yaml` mapira host:8080 → loadbalancer:80, blokira backend default port. |
+| 2026-05-28 | **CI/CD prioritet eskaliran iz Faze 8 u "hitno"** | Asistent na poslednjim vežbama (5) eksplicitno tražio kompletan CI/CD što pre, ne na kraju projekta. Detaljan plan u `ci-cd-plan.md`. |
 
 ---
 
