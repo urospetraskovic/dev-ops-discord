@@ -48,6 +48,7 @@ Ukupno: **~70%** projekta.
 - **D5** ✅ `postInitApplicationSQL` + `OWNER TO` (items/orders šema u CNPG bootstrap-u) — shop-operator
 - **D6** ✅ Hadolint Docker Build workflow (shop-operator + shop)
 - **D9** ✅ Per-Shop Grafana dashboard, 100% po spec 4.1 (HTTP total/2xx/4xx/404/GB + CPU/RAM/FS-volume/net + latency). Jedinstveni posetioci odloženi za D8/Loki.
+- **D10** ✅ Per-Shop alerting → Discord. PrometheusRule (shop+cluster alarmi) + operator-kreiran AlertmanagerConfig (apiURL secret-ref, OnNamespace tenant izolacija) → Discord webhook. Dokazano end-to-end (ShopHighErrorRate firing → poruka u Discord kanalu).
 - **D11** ✅ Shop backend (Go/Gin, items+orders CRUD, Prometheus `/metrics`, probes) + frontend skela + operator wiring (DATABASE_URL env, probes)
 - **CI/CD Faza A+B** ✅ kompletni validation + publish workflow-i kroz sva 3 app repo-a + helm-charts OCI
 
@@ -75,7 +76,7 @@ Ukupno: **~70%** projekta.
 | **D7** | **Pravi unit testovi** (envtest sa namespace per-test) | ~1.5h | Faza 2.10 — placeholder testovi sada, treba da pišemo prave |
 | **D8** | **Loki + Promtail** za logove + **Tempo** za tracing (zahtev 4.1) | ~2h | Faza 6 — trenutno nemamo, samo metrike. **Uključuje i jedinstvene posetioce (4.1.d)** preko Loki distinct query-ja |
 | ~~**D9**~~ ✅ | ~~**Per-Shop Grafana dashboard**~~ — GOTOVO, 100% po spec 4.1 (osim unique visitors → D8) | ~1.5h | — |
-| **D10** | **PrometheusRule alarmi + Alertmanager → Discord** integracija | ~2h | Faza 6 — DiscordChannel CRD ima webhook Secret, treba se Alertmanager-om kačiti. **← SLEDEĆE** |
+| ~~**D10**~~ ✅ | ~~**PrometheusRule alarmi + Alertmanager → Discord**~~ — GOTOVO, per-Shop preko operator-kreiranog AlertmanagerConfig (apiURL secret-ref, OnNamespace izolacija) | ~2h | — |
 | ~~**D11**~~ ✅ | ~~**Shop backend** (Go/Gin) sa CRUD-om i `/metrics`~~ — GOTOVO + frontend skela + operator wiring | ~2h | — |
 | **D12** | **Web3 plaćanje** (Sepolia + USDT + MetaMask) | ~2-3h | Faza 5 — još nismo počeli |
 | **D13** | **ShopHub auth** (JWT email+password ili Web3 SIWE) | ~2h | Faza 4 — trenutno backend bez auth-a |
