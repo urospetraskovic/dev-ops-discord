@@ -36,18 +36,22 @@
 | Faza 1: k3d klaster + CNPG + MongoDB operator (umesto Redis) | kube-state #3 | 95% |
 | Faza 2: Shop operator (sva 3 CRD-a sa reconciler-ima) | shop-operator #2-6 + #7 (ServiceMonitor) | **100%** |
 | Faza 3: Shop backend (Go/Gin CRUD items/orders, /metrics, /probe/*) + frontend (Vite/React/TS) skela | shop #2-4 | 60% |
-| Faza 4: ShopHub backend (REST API CRUD za Shop CR-ove, bez auth-a) | shophub #2 | 60% |
-| Faza 6: Observability — kube-prometheus-stack + **per-Shop Grafana dashboard** (HTTP + CPU/RAM/FS/net, spec 4.1) | kube-state #4, shop-operator #7, helm-charts #6-8 + fix | **80%** |
+| Faza 4: ShopHub backend (REST CRUD + **JWT auth + per-user multi-tenancy**) + **Helm chart deploy-ovan u cluster** | shophub #2,#5,#6 | 90% |
+| Faza 6: Observability — **KOMPLETNO** (metrics + per-Shop Grafana dashboard + Loki logs + Tempo traces + Alertmanager→Discord alarmi, spec 4.1) | kube-state #4+, shop-operator #7+, helm-charts #6+ | **100%** |
 | Faza 7.1: Shop operator Helm chart (eliminacioni zahtev) | helm-charts #2 | 100% |
+| Faza 7.2: ShopHub Helm chart (backend + RBAC + CNPG + JWT + ServiceMonitor, spec 3.3) | helm-charts (shophub) | **100%** |
 | Faza 8: CI/CD pipeline — test/lint/docker-build/docker-publish (shop-operator, shophub) + helm-publish (OCI) | sve faze A+B | **85%** |
 
-Ukupno: **~70%** projekta.
+Ukupno: **~88%** projekta.
 
 ### Završeno u sesiji 2026-05-29 (D-items)
 
 - **D5** ✅ `postInitApplicationSQL` + `OWNER TO` (items/orders šema u CNPG bootstrap-u) — shop-operator
 - **D6** ✅ Hadolint Docker Build workflow (shop-operator + shop)
 - **D9** ✅ Per-Shop Grafana dashboard, 100% po spec 4.1 (HTTP total/2xx/4xx/404/GB + CPU/RAM/FS-volume/net + latency). Jedinstveni posetioci odloženi za D8/Loki.
+- **D8** ✅ Observability dovršen: Loki (logging) + Tempo (OTLP tracing, OTel u backend-u, OTEL env injektuje operator) + unique visitors (Loki distinct). Trace-ovi dokazani u Grafani (demo-shop span-ovi).
+- **D13** ✅ ShopHub JWT auth + per-user tenant namespace multi-tenancy (Postgres users, bcrypt, JWT nosi namespace, middleware scope-uje per-tenant).
+- **D14** ✅ ShopHub Helm chart deploy-ovan u cluster (backend + RBAC + CNPG users DB + JWT secret + ServiceMonitor). Register→login→shop u svom tenant ns dokazano in-cluster.
 - **D10** ✅ Per-Shop alerting → Discord. PrometheusRule (shop+cluster alarmi) + operator-kreiran AlertmanagerConfig (apiURL secret-ref, OnNamespace tenant izolacija) → Discord webhook. Dokazano end-to-end (ShopHighErrorRate firing → poruka u Discord kanalu).
 - **D11** ✅ Shop backend (Go/Gin, items+orders CRUD, Prometheus `/metrics`, probes) + frontend skela + operator wiring (DATABASE_URL env, probes)
 - **CI/CD Faza A+B** ✅ kompletni validation + publish workflow-i kroz sva 3 app repo-a + helm-charts OCI
@@ -74,13 +78,13 @@ Ukupno: **~70%** projekta.
 | ~~**D5**~~ ✅ | ~~**`postInitApplicationSQL` sa `OWNER TO`**~~ — GOTOVO (shop-operator) | ~15 min | — |
 | ~~**D6**~~ ✅ | ~~**Hadolint** workflow~~ — GOTOVO (shop-operator + shop) | ~10 min | — |
 | **D7** | **Pravi unit testovi** (envtest sa namespace per-test) | ~1.5h | Faza 2.10 — placeholder testovi sada, treba da pišemo prave |
-| **D8** | **Loki + Promtail** za logove + **Tempo** za tracing (zahtev 4.1) | ~2h | Faza 6 — trenutno nemamo, samo metrike. **Uključuje i jedinstvene posetioce (4.1.d)** preko Loki distinct query-ja |
+| ~~**D8**~~ ✅ | ~~**Loki + Promtail** za logove + **Tempo** za tracing~~ — GOTOVO. Loki (logging) + Tempo (OTLP tracing, OpenTelemetry u backend-u) + unique visitors (4.1.d, Loki distinct query). Observability 100% (metrics+logs+traces+alerti). | ~2h | — |
 | ~~**D9**~~ ✅ | ~~**Per-Shop Grafana dashboard**~~ — GOTOVO, 100% po spec 4.1 (osim unique visitors → D8) | ~1.5h | — |
 | ~~**D10**~~ ✅ | ~~**PrometheusRule alarmi + Alertmanager → Discord**~~ — GOTOVO, per-Shop preko operator-kreiranog AlertmanagerConfig (apiURL secret-ref, OnNamespace izolacija) | ~2h | — |
 | ~~**D11**~~ ✅ | ~~**Shop backend** (Go/Gin) sa CRUD-om i `/metrics`~~ — GOTOVO + frontend skela + operator wiring | ~2h | — |
 | **D12** | **Web3 plaćanje** (Sepolia + USDT + MetaMask) | ~2-3h | Faza 5 — još nismo počeli |
-| **D13** | **ShopHub auth** (JWT email+password ili Web3 SIWE) | ~2h | Faza 4 — trenutno backend bez auth-a |
-| **D14** | **ShopHub Helm chart** sa kube-prometheus-stack dependency-jem | ~1.5h | Faza 7.2 — još nismo počeli |
+| ~~**D13**~~ ✅ | ~~**ShopHub auth** (JWT)~~ — GOTOVO + **puni multi-tenancy**: register/login (bcrypt+JWT, Postgres users), svaki korisnik dobija svoj `tenant-<id>` namespace, JWT nosi namespace, middleware scope-uje /api/shops per-tenant. Dokazano lokalno (register→shop u svom ns→401 bez tokena). | ~2h | Deployment ide sa D14 (CNPG + JWT_SECRET + RBAC) |
+| ~~**D14**~~ ✅ | ~~**ShopHub Helm chart**~~ — GOTOVO + deploy-ovan u cluster. Backend + ClusterRole (namespaces + cluster-wide shops) + CNPG users DB + JWT secret (lookup-preserve) + ServiceMonitor (spec 3.3). Dokazano: register→login→shop u svom tenant ns, RBAC radi. | ~1.5h | — |
 | **D15** | **Shop Helm chart** (opcioni fallback za ručnu instalaciju) | ~1h | Faza 7.3 — opcioni |
 
 ### Pomocni dokumenti
